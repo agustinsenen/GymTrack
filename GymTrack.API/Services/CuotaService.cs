@@ -41,7 +41,9 @@ namespace GymTrack.API.Services
         public async Task<PagoCuotaDto> RegistrarPagoAsync(int alumnoId, RegistrarPagoDto dto, int registradoPorId)
         {
             var hoy = FechaHelper.Hoy;
-            var fechaPago = (dto.FechaPago ?? hoy).Date;
+            var fechaPago = dto.FechaPago.HasValue
+                ? FechaHelper.ADiaArgentina(dto.FechaPago.Value)
+                : hoy;
 
             if (fechaPago > hoy)
             {
@@ -56,7 +58,7 @@ namespace GymTrack.API.Services
 
             if (dto.NuevaFechaVencimiento.HasValue)
             {
-                nuevoVencimiento = dto.NuevaFechaVencimiento.Value.Date;
+                nuevoVencimiento = FechaHelper.ADiaArgentina(dto.NuevaFechaVencimiento.Value);
             }
             else if (vencimientoActual.HasValue && vencimientoActual.Value >= fechaPago)
             {

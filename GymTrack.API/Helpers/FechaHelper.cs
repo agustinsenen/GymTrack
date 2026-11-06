@@ -24,5 +24,12 @@ namespace GymTrack.API.Helpers
             TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, ZonaArgentina);
 
         public static DateTime Hoy => Ahora.Date;
+
+        // Convierte una fecha recibida (ej.: "2026-11-06T22:27:28Z" en UTC)
+        // al día correspondiente en Argentina
+        public static DateTime ADiaArgentina(DateTime fecha) =>
+            fecha.Kind == DateTimeKind.Utc
+                ? TimeZoneInfo.ConvertTimeFromUtc(fecha, ZonaArgentina).Date
+                : fecha.Date;
     }
 }

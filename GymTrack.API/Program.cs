@@ -80,6 +80,10 @@ builder.Services.AddScoped<IProfesorService, ProfesorService>();
 builder.Services.AddScoped<IAlumnoService, AlumnoService>();
 builder.Services.AddScoped<ICuotaService, CuotaService>();
 builder.Services.AddScoped<IResumenService, ResumenService>();
+builder.Services.AddScoped<IImagenService, ImagenService>();
+builder.Services.AddScoped<IEjercicioService, EjercicioService>();
+builder.Services.AddScoped<IRutinaService, RutinaService>();
+builder.Services.AddScoped<IProgresoService, ProgresoService>();
 
 var app = builder.Build();
 

@@ -54,8 +54,7 @@ namespace GymTrack.API.Services
 
             // Último peso y "realizado hoy" de cada ejercicio
             var ejercicioIds = rutina.Items.Select(i => i.EjercicioId).Distinct().ToList();
-            var hoy = FechaHelper.Hoy;
-            var manana = hoy.AddDays(1);
+            var diaHoy = FechaHelper.DiaSemanaHoy;
 
             var registros = await _context.HistorialProgresos
                 .Where(h => h.AlumnoId == alumnoId && ejercicioIds.Contains(h.EjercicioId))
@@ -71,7 +70,16 @@ namespace GymTrack.API.Services
                     .Select(r => (decimal?)r.PesoKg)
                     .FirstOrDefault();
 
-                item.RealizadoHoy = delEjercicio.Any(r => r.Realizado && r.Fecha >= hoy && r.Fecha < manana);
+                // Realizado en su día de esta semana (hoy o un día anterior); los días que no llegaron no cuentan
+                item.RealizadoHoy = false;
+
+                if (item.DiaSemana <= diaHoy)
+                {
+                    var dia = FechaHelper.FechaDeDiaSemana(item.DiaSemana);
+                    var diaSiguiente = dia.AddDays(1);
+
+                    item.RealizadoHoy = delEjercicio.Any(r => r.Realizado && r.Fecha >= dia && r.Fecha < diaSiguiente);
+                }
             }
 
             return new RutinaDto

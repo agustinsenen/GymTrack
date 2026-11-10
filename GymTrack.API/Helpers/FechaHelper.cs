@@ -25,6 +25,20 @@ namespace GymTrack.API.Helpers
 
         public static DateTime Hoy => Ahora.Date;
 
+        // Día de la semana de hoy en Argentina: 1 = lunes ... 7 = domingo
+        public static int DiaSemanaHoy
+        {
+            get
+            {
+                var dia = (int)Ahora.DayOfWeek;
+                return dia == 0 ? 7 : dia;
+            }
+        }
+
+        // Fecha, en la semana actual (de lunes a domingo), del día indicado (1 = lunes ... 7 = domingo)
+        public static DateTime FechaDeDiaSemana(int diaSemana) =>
+            Hoy.AddDays(diaSemana - DiaSemanaHoy);
+
         // Convierte una fecha recibida (ej.: "2026-11-06T22:27:28Z" en UTC)
         // al día correspondiente en Argentina
         public static DateTime ADiaArgentina(DateTime fecha) =>

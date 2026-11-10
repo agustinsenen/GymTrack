@@ -55,8 +55,17 @@ else
             <div class="gt-error">@error</div>
         }
 
-        <button class="gt-btn" @onclick="MarcarRealizado" disabled="@guardando">
-            @(guardando ? "Guardando..." : item.RealizadoHoy ? "Actualizar registro de hoy" : "Marcar como realizado")
+        @if (EsFuturo)
+        {
+            <div class="gt-info">Este ejercicio es del @Formato.Dias[item.DiaSemana].ToLower(). Podés marcarlo ese día.</div>
+        }
+        else if (EsAtrasado)
+        {
+            <div class="gt-info">Este ejercicio era del @Formato.Dias[item.DiaSemana].ToLower(). Lo podés registrar igual.</div>
+        }
+
+        <button class="gt-btn" @onclick="MarcarRealizado" disabled="@(guardando || EsFuturo)">
+            @(guardando ? "Guardando..." : item.RealizadoHoy ? "Actualizar registro" : "Marcar como realizado")
         </button>
     </div>
 }
@@ -69,6 +78,10 @@ else
     private bool cargando = true;
     private bool guardando;
     private string? error;
+
+    // Se puede marcar el ejercicio de hoy o uno atrasado de esta semana; no el de un día que todavía no llegó
+    private bool EsFuturo => item != null && item.DiaSemana > Formato.DiaDeHoy();
+    private bool EsAtrasado => item != null && item.DiaSemana < Formato.DiaDeHoy();
 
     protected override async Task OnInitializedAsync()
     {

@@ -71,7 +71,7 @@ namespace GymTrack.API.Data
             modelBuilder.Entity<HistorialProgreso>().Property(h => h.PesoKg).HasPrecision(6, 2);
             modelBuilder.Entity<RutinaEjercicio>().Property(r => r.KgObjetivo).HasPrecision(6, 2);
 
-            // Ninguna eliminación borra datos en cascada (igual que en el TP5)
+            // Ninguna eliminación borra datos en cascada 
             foreach (var fk in modelBuilder.Model.GetEntityTypes()
                          .SelectMany(e => e.GetForeignKeys()))
             {

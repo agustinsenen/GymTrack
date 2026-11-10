@@ -10,6 +10,9 @@ namespace GymTrack.API.Services
 {
     public class ProgresoService : IProgresoService
     {
+        private static readonly string[] NombresDias =
+            { "", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo" };
+
         private readonly AppDbContext _context;
         private readonly IAuditoriaService _auditoria;
 
@@ -26,20 +29,30 @@ namespace GymTrack.API.Services
                 .Where(re => re.Id == dto.RutinaEjercicioId
                           && re.Rutina!.AlumnoId == alumnoId
                           && re.Rutina.Activa)
-                .Select(re => new { re.EjercicioId, EjercicioNombre = re.Ejercicio!.Nombre })
+                .Select(re => new { re.EjercicioId, EjercicioNombre = re.Ejercicio!.Nombre, re.DiaSemana })
                 .FirstOrDefaultAsync()
                 ?? throw new NoEncontradoException("El ejercicio no pertenece a tu rutina actual.");
 
+            // Se puede marcar el ejercicio de hoy o uno atrasado de esta semana, pero no el de un día que todavía no llegó
+            if (item.DiaSemana > FechaHelper.DiaSemanaHoy)
+            {
+                throw new ReglaDeNegocioException(
+                    $"Este ejercicio es del {NombresDias[item.DiaSemana].ToLower()}. Podés marcarlo ese día.");
+            }
+
             var ahora = FechaHelper.Ahora;
             var hoy = ahora.Date;
-            var manana = hoy.AddDays(1);
 
-            // Un registro por ejercicio y por día: si ya lo cargó hoy, se actualiza
+            // Fecha del día de la rutina al que pertenece el ejercicio (hoy, o un día anterior de esta semana)
+            var diaDelEjercicio = FechaHelper.FechaDeDiaSemana(item.DiaSemana);
+            var diaSiguiente = diaDelEjercicio.AddDays(1);
+
+            // Un registro por ejercicio y por día de la rutina: si ya lo cargó, se actualiza
             var registro = await _context.HistorialProgresos
                 .FirstOrDefaultAsync(h => h.AlumnoId == alumnoId
                                        && h.EjercicioId == item.EjercicioId
-                                       && h.Fecha >= hoy
-                                       && h.Fecha < manana);
+                                       && h.Fecha >= diaDelEjercicio
+                                       && h.Fecha < diaSiguiente);
 
             if (registro == null)
             {
@@ -52,11 +65,12 @@ namespace GymTrack.API.Services
                 _context.HistorialProgresos.Add(registro);
             }
 
-            registro.Fecha = ahora;
+            // Si es un ejercicio atrasado, queda con la fecha de su día para no pisar el de otro día
+            registro.Fecha = diaDelEjercicio == hoy ? ahora : diaDelEjercicio.Add(ahora.TimeOfDay);
             registro.PesoKg = dto.PesoKg;
             registro.Realizado = dto.Realizado;
 
-            // Asistencia automática con el primer ejercicio realizado del día
+            // Asistencia automática (de hoy) con el primer ejercicio realizado del día
             if (dto.Realizado &&
                 !await _context.Asistencias.AnyAsync(a => a.AlumnoId == alumnoId && a.Fecha == hoy))
             {

@@ -1,0 +1,82 @@
+@using System.Globalization
+@using System.Text
+
+@* Gráfico de línea hecho con SVG (sin librerías): evolución de los kg en el tiempo *@
+
+@if (Puntos.Count > 0)
+{
+    @((MarkupString)svg)
+}
+
+@code {
+    [Parameter] public List<HistorialProgresoDto> Puntos { get; set; } = new();
+
+    private string svg = "";
+
+    protected override void OnParametersSet()
+    {
+        svg = Puntos.Count > 0 ? Dibujar() : "";
+    }
+
+    // Los números del SVG siempre van con punto decimal
+    private static string N(double valor) =>
+        valor.ToString("0.#", CultureInfo.InvariantCulture);
+
+    private string Dibujar()
+    {
+        const double izquierda = 38, derecha = 310, arriba = 12, abajo = 138;
+
+        var pesos = Puntos.Select(p => (double)p.PesoKg).ToList();
+        var minimo = pesos.Min();
+        var maximo = pesos.Max();
+
+        if (maximo - minimo < 1)
+        {
+            // Todos los valores iguales: se abre un poco la escala
+            minimo -= 5;
+            maximo += 5;
+        }
+
+        double X(int i) => Puntos.Count == 1
+            ? (izquierda + derecha) / 2
+            : izquierda + (derecha - izquierda) * i / (Puntos.Count - 1);
+
+        double Y(double kg) => abajo - (abajo - arriba) * (kg - minimo) / (maximo - minimo);
+
+        var sb = new StringBuilder();
+        sb.Append("<svg class=\"gt-svg\" viewBox=\"0 0 320 162\" xmlns=\"http://www.w3.org/2000/svg\">");
+
+        // Líneas guía con su valor en kg
+        for (var i = 0; i <= 3; i++)
+        {
+            var kg = minimo + (maximo - minimo) * i / 3;
+            var y = Y(kg);
+
+            sb.Append($"<line class=\"gt-svg-guia\" x1=\"{N(izquierda)}\" x2=\"{N(derecha)}\" y1=\"{N(y)}\" y2=\"{N(y)}\" />");
+            sb.Append($"<text class=\"gt-svg-eje\" x=\"{N(izquierda - 6)}\" y=\"{N(y + 3)}\" text-anchor=\"end\">{N(kg)}</text>");
+        }
+
+        if (Puntos.Count > 1)
+        {
+            var linea = string.Join(" ", Puntos.Select((p, i) => $"{N(X(i))},{N(Y((double)p.PesoKg))}"));
+            sb.Append($"<polyline class=\"gt-svg-linea\" points=\"{linea}\" />");
+        }
+
+        for (var i = 0; i < Puntos.Count; i++)
+        {
+            sb.Append($"<circle class=\"gt-svg-punto\" cx=\"{N(X(i))}\" cy=\"{N(Y((double)Puntos[i].PesoKg))}\" r=\"3.5\" />");
+        }
+
+        // Fechas del primer y del último registro
+        sb.Append($"<text class=\"gt-svg-eje\" x=\"{N(izquierda)}\" y=\"156\">{Puntos[0].Fecha:dd/MM}</text>");
+
+        if (Puntos.Count > 1)
+        {
+            sb.Append($"<text class=\"gt-svg-eje\" x=\"{N(derecha)}\" y=\"156\" text-anchor=\"end\">{Puntos[^1].Fecha:dd/MM}</text>");
+        }
+
+        sb.Append("</svg>");
+
+        return sb.ToString();
+    }
+}

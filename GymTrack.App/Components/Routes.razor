@@ -1,0 +1,28 @@
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(MauiProgram).Assembly">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)">
+                <NotAuthorized>
+                    @if (context.User.Identity?.IsAuthenticated != true)
+                    {
+                        <RedirectToLogin />
+                    }
+                    else
+                    {
+                        <div class="gt-error">
+                            No tenés permiso para ver esta pantalla.
+                        </div>
+                    }
+                </NotAuthorized>
+                <Authorizing>
+                    <p class="gt-info">Cargando...</p>
+                </Authorizing>
+            </AuthorizeRouteView>
+        </Found>
+        <NotFound>
+            <LayoutView Layout="@typeof(Layout.MainLayout)">
+                <p class="gt-info" role="alert">No hay nada en esta dirección.</p>
+            </LayoutView>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>

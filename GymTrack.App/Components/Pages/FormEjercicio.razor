@@ -1,0 +1,201 @@
+@page "/ejercicios/nuevo"
+@page "/ejercicios/{Id:int}"
+@attribute [Authorize(Roles = "Administrador,Profesor")]
+@inject EjerciciosService EjerciciosSvc
+@inject NavigationManager Nav
+
+<a class="gt-volver" href="ejercicios">‹ Volver a ejercicios</a>
+
+<h2 class="gt-h">@(Id.HasValue ? "Editar ejercicio" : "Nuevo ejercicio")</h2>
+
+@if (cargando)
+{
+    <p class="gt-info">Cargando...</p>
+}
+else
+{
+    <div class="gt-card">
+        <label class="gt-label">Nombre</label>
+        <input class="gt-input" maxlength="100" @bind="nombre" />
+
+        <label class="gt-label">Grupo muscular</label>
+        <select class="gt-input" @bind="grupoId">
+            <option value="0">Elegí un grupo</option>
+            @foreach (var grupo in grupos)
+            {
+                <option value="@grupo.Id">@grupo.Nombre</option>
+            }
+        </select>
+
+        <label class="gt-label">Descripción (opcional)</label>
+        <textarea class="gt-input" rows="3" maxlength="500" @bind="descripcion"></textarea>
+
+        <label class="gt-label">Observación (opcional)</label>
+        <input class="gt-input" maxlength="300" @bind="observacion" />
+
+        <label class="gt-label">Link del video (opcional)</label>
+        <input class="gt-input" type="url" maxlength="300" placeholder="https://www.youtube.com/..." autocapitalize="none" @bind="videoUrl" />
+
+        <label class="gt-label">Foto (opcional)</label>
+
+        @if (fotoActual != null && !quitarFoto && fotoNueva == null)
+        {
+            <img class="gt-foto" src="@fotoActual" alt="Foto actual" />
+            <button class="gt-quitar" @onclick="() => quitarFoto = true">Quitar foto</button>
+        }
+
+        <InputFile class="gt-input" accept="image/*" OnChange="ElegirFotoAsync" />
+
+        @if (fotoNueva != null)
+        {
+            <div class="gt-ok">Foto lista para subir.</div>
+        }
+
+        @if (error != null)
+        {
+            <div class="gt-error">@error</div>
+        }
+
+        <button class="gt-btn" @onclick="GuardarAsync" disabled="@guardando">
+            @(guardando ? "Guardando..." : "Guardar")
+        </button>
+
+        @if (Id.HasValue)
+        {
+            <button class="gt-btn peligro" @onclick="DarDeBajaAsync" disabled="@guardando">
+                @(confirmarBaja ? "Tocá de nuevo para confirmar la baja" : "Dar de baja")
+            </button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    private const long TamanoMaximo = 2 * 1024 * 1024; // 2 MB, igual que la API
+
+    private List<GrupoMuscularDto> grupos = new();
+    private string nombre = "";
+    private int grupoId;
+    private string descripcion = "";
+    private string observacion = "";
+    private string videoUrl = "";
+    private string? fotoActual;
+    private byte[]? fotoNueva;
+    private bool quitarFoto;
+    private bool cargando = true;
+    private bool guardando;
+    private bool confirmarBaja;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var (listaGrupos, _) = await EjerciciosSvc.GruposAsync();
+        grupos = listaGrupos ?? new();
+
+        if (Id.HasValue)
+        {
+            var (ejercicio, mensaje) = await EjerciciosSvc.ObtenerAsync(Id.Value);
+
+            if (ejercicio == null)
+            {
+                error = mensaje;
+            }
+            else
+            {
+                nombre = ejercicio.Nombre;
+                grupoId = ejercicio.GrupoMuscularId;
+                descripcion = ejercicio.Descripcion ?? "";
+                observacion = ejercicio.Observacion ?? "";
+                videoUrl = ejercicio.VideoUrl ?? "";
+                fotoActual = EjerciciosSvc.UrlImagen(ejercicio.FotoUrl);
+            }
+        }
+
+        cargando = false;
+    }
+
+    private async Task ElegirFotoAsync(InputFileChangeEventArgs e)
+    {
+        error = null;
+        fotoNueva = null;
+
+        try
+        {
+            // Se achica la imagen en el celular para que no supere los 2 MB
+            var imagen = await e.File.RequestImageFileAsync("image/jpeg", 1000, 1000);
+
+            if (imagen.Size > TamanoMaximo)
+            {
+                error = "La foto es demasiado pesada (máximo 2 MB).";
+                return;
+            }
+
+            using var memoria = new MemoryStream();
+            await imagen.OpenReadStream(TamanoMaximo).CopyToAsync(memoria);
+
+            fotoNueva = memoria.ToArray();
+        }
+        catch (Exception)
+        {
+            error = "No se pudo leer la foto. Probá con otra imagen.";
+        }
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(nombre))
+        {
+            error = "Ingresá el nombre del ejercicio.";
+            return;
+        }
+
+        if (grupoId == 0)
+        {
+            error = "Elegí un grupo muscular.";
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(videoUrl) &&
+            !videoUrl.Trim().StartsWith("http", StringComparison.OrdinalIgnoreCase))
+        {
+            error = "El link del video debe empezar con http:// o https://";
+            return;
+        }
+
+        guardando = true;
+        error = null;
+
+        var (ejercicio, mensaje) = await EjerciciosSvc.GuardarAsync(
+            Id, nombre, grupoId, descripcion, observacion, videoUrl, fotoNueva, quitarFoto);
+
+        guardando = false;
+
+        if (ejercicio == null)
+        {
+            error = mensaje;
+            return;
+        }
+
+        Nav.NavigateTo("ejercicios");
+    }
+
+    private async Task DarDeBajaAsync()
+    {
+        // Primer toque: pide confirmación. Segundo toque: da de baja.
+        if (!confirmarBaja)
+        {
+            confirmarBaja = true;
+            return;
+        }
+
+        guardando = true;
+        error = await EjerciciosSvc.DarDeBajaAsync(Id!.Value);
+        guardando = false;
+
+        if (error == null)
+        {
+            Nav.NavigateTo("ejercicios");
+        }
+    }
+}

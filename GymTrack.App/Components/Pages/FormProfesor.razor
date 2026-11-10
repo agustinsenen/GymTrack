@@ -1,0 +1,149 @@
+@page "/profesores/nuevo"
+@page "/profesores/{Id:int}"
+@attribute [Authorize(Roles = "Administrador")]
+@inject ProfesoresService ProfesoresSvc
+@inject NavigationManager Nav
+
+<a class="gt-volver" href="admin">‹ Volver al panel</a>
+
+<h2 class="gt-h">@(Id.HasValue ? "Editar profesor" : "Nuevo profesor")</h2>
+
+@if (cargando)
+{
+    <p class="gt-info">Cargando...</p>
+}
+else
+{
+    <div class="gt-card">
+        <label class="gt-label">Nombre y apellido</label>
+        <input class="gt-input" maxlength="100" @bind="nombre" />
+
+        <label class="gt-label">Email</label>
+        <input class="gt-input" type="email" maxlength="150" autocapitalize="none" @bind="email" />
+
+        <label class="gt-label">Contraseña</label>
+        <input class="gt-input" type="password" @bind="password" />
+        <div class="gt-item-sub">
+            @(Id.HasValue ? "Dejala vacía para no cambiarla." : "Mínimo 6 caracteres.")
+        </div>
+
+        @if (error != null)
+        {
+            <div class="gt-error">@error</div>
+        }
+
+        <button class="gt-btn" @onclick="GuardarAsync" disabled="@guardando">
+            @(guardando ? "Guardando..." : "Guardar")
+        </button>
+
+        @if (Id.HasValue)
+        {
+            <button class="gt-btn peligro" @onclick="DarDeBajaAsync" disabled="@guardando">
+                @(confirmarBaja ? "Tocá de nuevo para confirmar la baja" : "Dar de baja")
+            </button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    private string nombre = "";
+    private string email = "";
+    private string password = "";
+    private bool cargando = true;
+    private bool guardando;
+    private bool confirmarBaja;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id.HasValue)
+        {
+            var (profesor, mensaje) = await ProfesoresSvc.ObtenerAsync(Id.Value);
+
+            if (profesor == null)
+            {
+                error = mensaje;
+            }
+            else
+            {
+                nombre = profesor.Nombre;
+                email = profesor.Email;
+            }
+        }
+
+        cargando = false;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(nombre))
+        {
+            error = "Ingresá el nombre.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
+        {
+            error = "Ingresá un email válido.";
+            return;
+        }
+
+        if (!Id.HasValue && string.IsNullOrWhiteSpace(password))
+        {
+            error = "Ingresá una contraseña.";
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(password) && password.Length < 6)
+        {
+            error = "La contraseña debe tener al menos 6 caracteres.";
+            return;
+        }
+
+        guardando = true;
+        error = null;
+
+        var dto = new GuardarProfesorDto
+        {
+            Nombre = nombre.Trim(),
+            Email = email.Trim(),
+            Password = string.IsNullOrWhiteSpace(password) ? null : password,
+            Activo = true
+        };
+
+        var (profesor, mensaje) = Id.HasValue
+            ? await ProfesoresSvc.ActualizarAsync(Id.Value, dto)
+            : await ProfesoresSvc.CrearAsync(dto);
+
+        guardando = false;
+
+        if (profesor == null)
+        {
+            error = mensaje;
+            return;
+        }
+
+        Nav.NavigateTo("admin");
+    }
+
+    private async Task DarDeBajaAsync()
+    {
+        // Primer toque: pide confirmación. Segundo toque: da de baja.
+        if (!confirmarBaja)
+        {
+            confirmarBaja = true;
+            return;
+        }
+
+        guardando = true;
+        error = await ProfesoresSvc.DarDeBajaAsync(Id!.Value);
+        guardando = false;
+
+        if (error == null)
+        {
+            Nav.NavigateTo("admin");
+        }
+    }
+}

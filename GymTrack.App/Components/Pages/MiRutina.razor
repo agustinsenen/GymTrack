@@ -1,0 +1,70 @@
+@page "/rutina"
+@attribute [Authorize(Roles = "Alumno")]
+@inject RutinasService RutinasSvc
+
+<h2 class="gt-h">Mi rutina</h2>
+
+@if (cargando)
+{
+    <p class="gt-info">Cargando...</p>
+}
+else if (rutina == null)
+{
+    <div class="gt-vacio">@(error ?? "Todavía no tenés una rutina asignada.")</div>
+}
+else
+{
+    <div class="gt-chips">
+        @foreach (var dia in rutina.Dias)
+        {
+            var numero = dia.DiaSemana;
+            <button class="gt-chip @(numero == diaSeleccionado ? "activo" : "")" @onclick="() => diaSeleccionado = numero">
+                @dia.NombreDia
+            </button>
+        }
+    </div>
+
+    @foreach (var dia in rutina.Dias.Where(d => d.DiaSemana == diaSeleccionado))
+    {
+        <div class="gt-card">
+            <div class="gt-card-titulo">@dia.NombreDia</div>
+
+            @foreach (var item in dia.Ejercicios)
+            {
+                <a class="gt-item" href="rutina/ejercicio/@item.Id">
+                    <span class="gt-check @(item.RealizadoHoy ? "hecho" : "")">@(item.RealizadoHoy ? "✓" : "")</span>
+                    <span class="gt-item-texto">
+                        <span class="gt-item-nombre">@item.EjercicioNombre</span>
+                        <span class="gt-item-sub">@item.GrupoMuscular</span>
+                    </span>
+                    <span class="gt-item-dato">@item.Series × @item.Repeticiones</span>
+                </a>
+            }
+        </div>
+    }
+
+    <p class="gt-nota">Rutina armada por @rutina.ProfesorNombre. Tocá un ejercicio para ver el detalle y registrar tu peso.</p>
+}
+
+@code {
+    private RutinaDto? rutina;
+    private int diaSeleccionado;
+    private bool cargando = true;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        (rutina, error) = await RutinasSvc.ObtenerAsync();
+        cargando = false;
+
+        if (rutina != null && rutina.Dias.Count > 0)
+        {
+            // Se abre en el día de hoy si la rutina lo incluye; si no, en el primero
+            var hoy = Formato.DiaDeHoy();
+
+            diaSeleccionado = rutina.Dias.Any(d => d.DiaSemana == hoy)
+                ? hoy
+                : rutina.Dias[0].DiaSemana;
+        }
+    }
+}

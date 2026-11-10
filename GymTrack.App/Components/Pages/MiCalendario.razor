@@ -1,0 +1,63 @@
+@page "/calendario"
+@attribute [Authorize(Roles = "Alumno")]
+@inject AlumnosService AlumnosSvc
+
+<h2 class="gt-h">Calendario</h2>
+
+@if (cargando)
+{
+    <p class="gt-info">Cargando...</p>
+}
+else if (alumno == null)
+{
+    <div class="gt-error">@(error ?? "No se pudieron cargar tus datos.")</div>
+}
+else
+{
+    <div class="gt-cuota @(alumno.CuotaVencida ? "vencida" : "")">
+        <div class="gt-cuota-texto">@Formato.Cuota(alumno)</div>
+        @if (alumno.FechaVencimientoCuota.HasValue)
+        {
+            <div class="gt-cuota-fecha">Vencimiento: @Formato.Fecha(alumno.FechaVencimientoCuota.Value)</div>
+        }
+    </div>
+
+    <CalendarioMes Vencimiento="alumno.FechaVencimientoCuota" />
+
+    <div class="gt-card">
+        <div class="gt-card-titulo">Historial de pagos</div>
+
+        @if (pagos.Count == 0)
+        {
+            <div class="gt-item-sub">Todavía no hay pagos registrados.</div>
+        }
+
+        @foreach (var pago in pagos)
+        {
+            <div class="gt-fila">
+                <span>Pagó el @Formato.Fecha(pago.FechaPago)</span>
+                <span class="gt-item-sub">cubre hasta @Formato.Fecha(pago.NuevaFechaVencimiento)</span>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private AlumnoDto? alumno;
+    private List<PagoCuotaDto> pagos = new();
+    private bool cargando = true;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        (alumno, error) = await AlumnosSvc.ObtenerPropioAsync();
+
+        if (alumno != null)
+        {
+            var (lista, _) = await AlumnosSvc.PagosAsync();
+            pagos = lista ?? new();
+        }
+
+        cargando = false;
+    }
+}

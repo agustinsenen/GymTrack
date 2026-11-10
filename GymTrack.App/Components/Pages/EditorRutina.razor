@@ -1,0 +1,264 @@
+@page "/alumnos/{Id:int}/rutina"
+@attribute [Authorize(Roles = "Administrador,Profesor")]
+@inject RutinasService RutinasSvc
+@inject EjerciciosService EjerciciosSvc
+@inject NavigationManager Nav
+
+<a class="gt-volver" href="alumnos/@Id">‹ Volver al alumno</a>
+
+<h2 class="gt-h">Rutina semanal</h2>
+
+@if (cargando)
+{
+    <p class="gt-info">Cargando...</p>
+}
+else
+{
+    <div class="gt-card">
+        <div class="gt-card-titulo">Agregar ejercicio</div>
+
+        <label class="gt-label">Día</label>
+        <select class="gt-input" @bind="nuevoDia">
+            @for (var dia = 1; dia <= 7; dia++)
+            {
+                <option value="@dia">@Formato.Dias[dia]</option>
+            }
+        </select>
+
+        <label class="gt-label">Grupo muscular</label>
+        <select class="gt-input" @bind="filtroGrupo">
+            <option value="0">Todos</option>
+            @foreach (var grupo in grupos)
+            {
+                <option value="@grupo.Id">@grupo.Nombre</option>
+            }
+        </select>
+
+        <label class="gt-label">Ejercicio</label>
+        <select class="gt-input" @bind="nuevoEjercicioId">
+            <option value="0">Elegí un ejercicio</option>
+            @foreach (var ejercicio in ejercicios.Where(e => filtroGrupo == 0 || e.GrupoMuscularId == filtroGrupo))
+            {
+                <option value="@ejercicio.Id">@ejercicio.Nombre</option>
+            }
+        </select>
+
+        <div class="gt-tres">
+            <div>
+                <label class="gt-label">Series</label>
+                <input class="gt-input" type="number" min="1" max="20" @bind="nuevoSeries" />
+            </div>
+            <div>
+                <label class="gt-label">Repeticiones</label>
+                <input class="gt-input" type="number" min="1" max="100" @bind="nuevoRepeticiones" />
+            </div>
+            <div>
+                <label class="gt-label">Objetivo kg</label>
+                <input class="gt-input" type="number" min="0" step="0.5" @bind="nuevoKg" />
+            </div>
+        </div>
+
+        @if (errorAgregar != null)
+        {
+            <div class="gt-error">@errorAgregar</div>
+        }
+
+        <button class="gt-btn secundario" @onclick="Agregar">Agregar a la rutina</button>
+    </div>
+
+    @if (filas.Count == 0)
+    {
+        <div class="gt-vacio">La rutina está vacía. Agregá ejercicios con el formulario de arriba.</div>
+    }
+
+    @foreach (var grupoDia in filas.GroupBy(f => f.DiaSemana).OrderBy(g => g.Key))
+    {
+        <div class="gt-card">
+            <div class="gt-card-titulo">@Formato.Dias[grupoDia.Key]</div>
+
+            @foreach (var fila in grupoDia)
+            {
+                var actual = fila;
+                <div class="gt-item">
+                    <span class="gt-item-texto">
+                        <span class="gt-item-nombre">@fila.Nombre</span>
+                        <span class="gt-item-sub">
+                            @fila.Series × @fila.Repeticiones
+                            @if (fila.KgObjetivo.HasValue)
+                            {
+                                <text> · objetivo @Formato.Kg(fila.KgObjetivo.Value)</text>
+                            }
+                        </span>
+                    </span>
+                    <button class="gt-quitar" @onclick="() => Quitar(actual)">Quitar</button>
+                </div>
+            }
+        </div>
+    }
+
+    @if (error != null)
+    {
+        <div class="gt-error">@error</div>
+    }
+
+    <button class="gt-btn" @onclick="GuardarAsync" disabled="@guardando">
+        @(guardando ? "Guardando..." : "Guardar rutina")
+    </button>
+
+    <p class="gt-nota">Al guardar, esta rutina reemplaza a la anterior. El historial de pesos del alumno se conserva.</p>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    // Una línea de la rutina mientras se edita
+    private class Fila
+    {
+        public int EjercicioId { get; set; }
+        public string Nombre { get; set; } = "";
+        public int DiaSemana { get; set; }
+        public int Series { get; set; }
+        public int Repeticiones { get; set; }
+        public decimal? KgObjetivo { get; set; }
+    }
+
+    private List<GrupoMuscularDto> grupos = new();
+    private List<EjercicioDto> ejercicios = new();
+    private List<Fila> filas = new();
+
+    private int nuevoDia = 1;
+    private int filtroGrupo;
+    private int nuevoEjercicioId;
+    private int nuevoSeries = 3;
+    private int nuevoRepeticiones = 10;
+    private decimal? nuevoKg;
+
+    private bool cargando = true;
+    private bool guardando;
+    private string? error;
+    private string? errorAgregar;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var (listaGrupos, _) = await EjerciciosSvc.GruposAsync();
+        grupos = listaGrupos ?? new();
+
+        (var listaEjercicios, error) = await EjerciciosSvc.ListarAsync();
+        ejercicios = listaEjercicios ?? new();
+
+        // Si ya tiene rutina, se parte de la actual
+        var (rutina, _) = await RutinasSvc.ObtenerAsync(Id);
+
+        if (rutina != null)
+        {
+            filas = rutina.Dias
+                .SelectMany(d => d.Ejercicios)
+                .Select(e => new Fila
+                {
+                    EjercicioId = e.EjercicioId,
+                    Nombre = e.EjercicioNombre,
+                    DiaSemana = e.DiaSemana,
+                    Series = e.Series,
+                    Repeticiones = e.Repeticiones,
+                    KgObjetivo = e.KgObjetivo
+                })
+                .ToList();
+        }
+
+        cargando = false;
+    }
+
+    private void Agregar()
+    {
+        errorAgregar = null;
+
+        var ejercicio = ejercicios.FirstOrDefault(e => e.Id == nuevoEjercicioId);
+
+        if (ejercicio == null)
+        {
+            errorAgregar = "Elegí un ejercicio.";
+            return;
+        }
+
+        if (nuevoSeries < 1 || nuevoSeries > 20)
+        {
+            errorAgregar = "Las series deben estar entre 1 y 20.";
+            return;
+        }
+
+        if (nuevoRepeticiones < 1 || nuevoRepeticiones > 100)
+        {
+            errorAgregar = "Las repeticiones deben estar entre 1 y 100.";
+            return;
+        }
+
+        if (nuevoKg.HasValue && (nuevoKg < 0 || nuevoKg > 1000))
+        {
+            errorAgregar = "El objetivo debe estar entre 0 y 1000 kg.";
+            return;
+        }
+
+        filas.Add(new Fila
+        {
+            EjercicioId = ejercicio.Id,
+            Nombre = ejercicio.Nombre,
+            DiaSemana = nuevoDia,
+            Series = nuevoSeries,
+            Repeticiones = nuevoRepeticiones,
+            KgObjetivo = nuevoKg
+        });
+
+        nuevoEjercicioId = 0;
+        nuevoKg = null;
+    }
+
+    private void Quitar(Fila fila)
+    {
+        filas.Remove(fila);
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (filas.Count == 0)
+        {
+            error = "Agregá al menos un ejercicio antes de guardar.";
+            return;
+        }
+
+        guardando = true;
+        error = null;
+
+        var dto = new GuardarRutinaDto();
+
+        // El orden dentro de cada día es el orden en que se fueron agregando
+        foreach (var grupoDia in filas.GroupBy(f => f.DiaSemana))
+        {
+            var orden = 1;
+
+            foreach (var fila in grupoDia)
+            {
+                dto.Ejercicios.Add(new ItemRutinaDto
+                {
+                    EjercicioId = fila.EjercicioId,
+                    DiaSemana = fila.DiaSemana,
+                    Series = fila.Series,
+                    Repeticiones = fila.Repeticiones,
+                    KgObjetivo = fila.KgObjetivo,
+                    Orden = orden++
+                });
+            }
+        }
+
+        var (rutina, mensaje) = await RutinasSvc.GuardarAsync(Id, dto);
+
+        guardando = false;
+
+        if (rutina == null)
+        {
+            error = mensaje;
+            return;
+        }
+
+        Nav.NavigateTo($"alumnos/{Id}");
+    }
+}

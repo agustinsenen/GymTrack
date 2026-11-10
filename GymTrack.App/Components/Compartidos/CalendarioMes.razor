@@ -1,0 +1,111 @@
+@inject ProgresoService ProgresoSvc
+
+@* Calendario mensual: marca los días con asistencia y el vencimiento de la cuota *@
+
+<div class="gt-card gt-cal">
+    <div class="gt-cal-nav">
+        <button class="gt-cal-flecha" @onclick="() => MoverAsync(-1)">‹</button>
+        <span class="gt-cal-titulo">@Titulo</span>
+        <button class="gt-cal-flecha" @onclick="() => MoverAsync(1)">›</button>
+    </div>
+
+    <div class="gt-cal-grid">
+        @foreach (var nombre in nombresDias)
+        {
+            <div class="gt-cal-dow">@nombre</div>
+        }
+
+        @for (var i = 0; i < Huecos; i++)
+        {
+            <div></div>
+        }
+
+        @for (var dia = 1; dia <= DateTime.DaysInMonth(anio, mes); dia++)
+        {
+            var fecha = new DateTime(anio, mes, dia);
+            <div class="gt-cal-dia @Clase(fecha)">@dia</div>
+        }
+    </div>
+
+    @if (error != null)
+    {
+        <div class="gt-error">@error</div>
+    }
+
+    <div class="gt-cal-pie">
+        <strong>@asistencias.Count</strong> asistencia(s) este mes
+    </div>
+
+    <div class="gt-cal-leyenda">
+        <span><i class="gt-punto asistio"></i> Asistió</span>
+        <span><i class="gt-punto vence"></i> Vence la cuota</span>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int? AlumnoId { get; set; }
+    [Parameter] public DateTime? Vencimiento { get; set; }
+
+    private static readonly string[] nombresDias = { "L", "M", "M", "J", "V", "S", "D" };
+
+    private int anio = DateTime.Today.Year;
+    private int mes = DateTime.Today.Month;
+    private HashSet<DateTime> asistencias = new();
+    private string? error;
+
+    private string Titulo
+    {
+        get
+        {
+            var texto = new DateTime(anio, mes, 1).ToString("MMMM yyyy", Formato.Cultura);
+            return char.ToUpper(texto[0]) + texto[1..];
+        }
+    }
+
+    // Casilleros vacíos antes del día 1 (la semana empieza el lunes)
+    private int Huecos => ((int)new DateTime(anio, mes, 1).DayOfWeek + 6) % 7;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task MoverAsync(int meses)
+    {
+        var nuevo = new DateTime(anio, mes, 1).AddMonths(meses);
+
+        anio = nuevo.Year;
+        mes = nuevo.Month;
+
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        var (datos, mensaje) = await ProgresoSvc.AsistenciasAsync(anio, mes, AlumnoId);
+
+        error = mensaje;
+        asistencias = datos == null
+            ? new HashSet<DateTime>()
+            : datos.Fechas.Select(f => f.Date).ToHashSet();
+    }
+
+    private string Clase(DateTime fecha)
+    {
+        var clases = "";
+
+        if (asistencias.Contains(fecha))
+        {
+            clases += " asistio";
+        }
+
+        if (Vencimiento.HasValue && Vencimiento.Value.Date == fecha)
+        {
+            clases += " vence";
+        }
+
+        if (fecha == DateTime.Today)
+        {
+            clases += " hoy";
+        }
+
+        return clases;
+    }
+}

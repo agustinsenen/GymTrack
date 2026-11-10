@@ -1,0 +1,30 @@
+@* Barra de abajo: cambia según el rol del usuario *@
+
+<AuthorizeView Roles="Alumno">
+    <Authorized>
+        <nav class="gt-nav">
+            <NavLink class="gt-nav-item" href="rutina">Rutina</NavLink>
+            <NavLink class="gt-nav-item" href="progreso">Progreso</NavLink>
+            <NavLink class="gt-nav-item" href="calendario">Calendario</NavLink>
+        </nav>
+    </Authorized>
+</AuthorizeView>
+
+<AuthorizeView Roles="Profesor">
+    <Authorized>
+        <nav class="gt-nav">
+            <NavLink class="gt-nav-item" href="alumnos">Alumnos</NavLink>
+            <NavLink class="gt-nav-item" href="ejercicios">Ejercicios</NavLink>
+        </nav>
+    </Authorized>
+</AuthorizeView>
+
+<AuthorizeView Roles="Administrador">
+    <Authorized>
+        <nav class="gt-nav">
+            <NavLink class="gt-nav-item" href="admin">Panel</NavLink>
+            <NavLink class="gt-nav-item" href="alumnos">Alumnos</NavLink>
+            <NavLink class="gt-nav-item" href="ejercicios">Ejercicios</NavLink>
+        </nav>
+    </Authorized>
+</AuthorizeView>

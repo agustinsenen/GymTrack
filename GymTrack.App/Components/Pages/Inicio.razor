@@ -1,0 +1,20 @@
+@page "/"
+@attribute [Authorize]
+@inject AuthService Auth
+@inject NavigationManager Nav
+
+@* Punto de entrada: manda a cada rol a su pantalla principal *@
+
+@code {
+    protected override void OnInitialized()
+    {
+        var destino = Auth.Rol switch
+        {
+            AuthService.RolAdmin => "admin",
+            AuthService.RolProfesor => "alumnos",
+            _ => "rutina"
+        };
+
+        Nav.NavigateTo(destino, replace: true);
+    }
+}

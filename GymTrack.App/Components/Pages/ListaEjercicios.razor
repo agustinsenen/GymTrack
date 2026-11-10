@@ -1,0 +1,75 @@
+@page "/ejercicios"
+@attribute [Authorize(Roles = "Administrador,Profesor")]
+@inject EjerciciosService EjerciciosSvc
+
+<h2 class="gt-h">Ejercicios</h2>
+
+<div class="gt-chips">
+    <button class="gt-chip @(grupoId == 0 ? "activo" : "")" @onclick="() => grupoId = 0">Todos</button>
+    @foreach (var grupo in grupos)
+    {
+        var id = grupo.Id;
+        <button class="gt-chip @(grupoId == id ? "activo" : "")" @onclick="() => grupoId = id">@grupo.Nombre</button>
+    }
+</div>
+
+@if (cargando)
+{
+    <p class="gt-info">Cargando...</p>
+}
+else if (error != null)
+{
+    <div class="gt-error">@error</div>
+}
+else if (!Visibles.Any())
+{
+    <div class="gt-vacio">No hay ejercicios en este grupo.</div>
+}
+else
+{
+    <div class="gt-card">
+        @foreach (var ejercicio in Visibles)
+        {
+            <a class="gt-item" href="ejercicios/@ejercicio.Id">
+                @if (EjerciciosSvc.UrlImagen(ejercicio.FotoUrl) is string foto)
+                {
+                    <img class="gt-mini" src="@foto" alt="" />
+                }
+                else
+                {
+                    <span class="gt-avatar">@Formato.Inicial(ejercicio.Nombre)</span>
+                }
+                <span class="gt-item-texto">
+                    <span class="gt-item-nombre">@ejercicio.Nombre</span>
+                    <span class="gt-item-sub">@ejercicio.GrupoMuscularNombre</span>
+                </span>
+                <span class="gt-item-dato">Editar</span>
+            </a>
+        }
+    </div>
+}
+
+<a class="gt-btn" href="ejercicios/nuevo">Agregar ejercicio</a>
+
+@code {
+    private List<GrupoMuscularDto> grupos = new();
+    private List<EjercicioDto> ejercicios = new();
+    private int grupoId;
+    private bool cargando = true;
+    private string? error;
+
+    private IEnumerable<EjercicioDto> Visibles =>
+        ejercicios.Where(e => grupoId == 0 || e.GrupoMuscularId == grupoId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var (listaGrupos, _) = await EjerciciosSvc.GruposAsync();
+        grupos = listaGrupos ?? new();
+
+        var (lista, mensaje) = await EjerciciosSvc.ListarAsync();
+        ejercicios = lista ?? new();
+        error = mensaje;
+
+        cargando = false;
+    }
+}

@@ -1,0 +1,55 @@
+@page "/login"
+@inject AuthService Auth
+@inject NavigationManager Nav
+
+<div class="gt-login">
+    <div class="gt-login-marca">GymTrack</div>
+    <p class="gt-login-sub">Ingresá con tu email o DNI y tu contraseña</p>
+
+    <label class="gt-label">Email o DNI</label>
+    <input class="gt-input" @bind="usuario" @bind:event="oninput" autocapitalize="none" />
+
+    <label class="gt-label">Contraseña</label>
+    <input class="gt-input" type="password" @bind="password" @bind:event="oninput" />
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="gt-error">@error</div>
+    }
+
+    <button class="gt-btn" @onclick="IniciarSesion" disabled="@cargando">
+        @(cargando ? "Ingresando..." : "Ingresar")
+    </button>
+</div>
+
+@code {
+    private string usuario = "";
+    private string password = "";
+    private string? error;
+    private bool cargando;
+
+    private async Task IniciarSesion()
+    {
+        if (string.IsNullOrWhiteSpace(usuario) || string.IsNullOrWhiteSpace(password))
+        {
+            error = "Completá el usuario y la contraseña.";
+            return;
+        }
+
+        cargando = true;
+        error = null;
+
+        var (exito, mensaje) = await Auth.LoginAsync(usuario, password);
+
+        cargando = false;
+
+        if (exito)
+        {
+            Nav.NavigateTo("/");
+        }
+        else
+        {
+            error = mensaje;
+        }
+    }
+}

@@ -1,0 +1,85 @@
+@page "/alumnos"
+@attribute [Authorize(Roles = "Administrador,Profesor")]
+@inject AlumnosService AlumnosSvc
+
+<h2 class="gt-h">Alumnos</h2>
+
+@if (resumen != null)
+{
+    <div class="gt-resumen">
+        <div><strong>@resumen.TotalAlumnos</strong><span>Alumnos</span></div>
+        <div><strong>@resumen.CuotaAlDia</strong><span>Al día</span></div>
+        <div class="@(resumen.CuotasVencidas > 0 ? "alerta" : "")"><strong>@resumen.CuotasVencidas</strong><span>Cuota vencida</span></div>
+    </div>
+}
+
+<div class="gt-buscar">
+    <input class="gt-input" placeholder="Buscar por nombre o DNI" @bind="buscar" @bind:event="oninput" @onkeyup="AlTeclear" />
+    <button class="gt-btn chico" @onclick="CargarAsync">Buscar</button>
+</div>
+
+@if (cargando)
+{
+    <p class="gt-info">Cargando...</p>
+}
+else if (error != null)
+{
+    <div class="gt-error">@error</div>
+}
+else if (alumnos.Count == 0)
+{
+    <div class="gt-vacio">No hay alumnos para mostrar.</div>
+}
+else
+{
+    <div class="gt-card">
+        @foreach (var alumno in alumnos)
+        {
+            <a class="gt-item" href="alumnos/@alumno.Id">
+                <span class="gt-avatar">@Formato.Inicial(alumno.Nombre)</span>
+                <span class="gt-item-texto">
+                    <span class="gt-item-nombre">@alumno.Nombre</span>
+                    <span class="gt-item-sub">DNI @alumno.Dni · Prof. @alumno.ProfesorNombre</span>
+                </span>
+                <span class="gt-etiqueta @(alumno.CuotaVencida ? "roja" : "verde")">
+                    @(alumno.CuotaVencida ? "Vencida" : "Al día")
+                </span>
+            </a>
+        }
+    </div>
+}
+
+<a class="gt-btn" href="alumnos/nuevo">Agregar alumno</a>
+
+@code {
+    private ResumenDto? resumen;
+    private List<AlumnoDto> alumnos = new();
+    private string buscar = "";
+    private bool cargando = true;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        (resumen, _) = await AlumnosSvc.ResumenAsync();
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        cargando = true;
+
+        var (datos, mensaje) = await AlumnosSvc.ListarAsync(buscar);
+
+        alumnos = datos ?? new();
+        error = mensaje;
+        cargando = false;
+    }
+
+    private async Task AlTeclear(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await CargarAsync();
+        }
+    }
+}

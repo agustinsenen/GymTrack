@@ -1,0 +1,68 @@
+@page "/admin"
+@attribute [Authorize(Roles = "Administrador")]
+@inject AlumnosService AlumnosSvc
+@inject ProfesoresService ProfesoresSvc
+
+<h2 class="gt-h">Panel del gimnasio</h2>
+
+@if (resumen != null)
+{
+    <div class="gt-resumen">
+        <div><strong>@resumen.TotalAlumnos</strong><span>Alumnos</span></div>
+        <div><strong>@(resumen.TotalProfesores ?? 0)</strong><span>Profesores</span></div>
+        <div class="@(resumen.CuotasVencidas > 0 ? "alerta" : "")"><strong>@resumen.CuotasVencidas</strong><span>Cuota vencida</span></div>
+    </div>
+}
+
+@if (cargando)
+{
+    <p class="gt-info">Cargando...</p>
+}
+else if (error != null)
+{
+    <div class="gt-error">@error</div>
+}
+else
+{
+    <div class="gt-card">
+        <div class="gt-card-titulo">Profesores</div>
+
+        @if (profesores.Count == 0)
+        {
+            <div class="gt-item-sub">Todavía no hay profesores cargados.</div>
+        }
+
+        @foreach (var profesor in profesores)
+        {
+            <a class="gt-item" href="profesores/@profesor.Id">
+                <span class="gt-avatar">@Formato.Inicial(profesor.Nombre)</span>
+                <span class="gt-item-texto">
+                    <span class="gt-item-nombre">@profesor.Nombre</span>
+                    <span class="gt-item-sub">@profesor.Email</span>
+                </span>
+                <span class="gt-item-dato">@profesor.CantidadAlumnos alumno(s)</span>
+            </a>
+        }
+    </div>
+}
+
+<a class="gt-btn" href="profesores/nuevo">Agregar profesor</a>
+<a class="gt-btn secundario" href="alumnos/nuevo">Agregar alumno</a>
+
+@code {
+    private ResumenDto? resumen;
+    private List<ProfesorDto> profesores = new();
+    private bool cargando = true;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        (resumen, _) = await AlumnosSvc.ResumenAsync();
+
+        var (lista, mensaje) = await ProfesoresSvc.ListarAsync();
+        profesores = lista ?? new();
+        error = mensaje;
+
+        cargando = false;
+    }
+}

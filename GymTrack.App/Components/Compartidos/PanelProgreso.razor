@@ -1,0 +1,88 @@
+@inject ProgresoService ProgresoSvc
+
+@* Progreso de kg por ejercicio. Lo usa el alumno (AlumnoId = null) y el profesor (con el id) *@
+
+@if (cargando)
+{
+    <p class="gt-info">Cargando...</p>
+}
+else if (error != null)
+{
+    <div class="gt-error">@error</div>
+}
+else if (resumen.Count == 0)
+{
+    <div class="gt-vacio">Todavía no hay registros de peso. Aparecen cuando el alumno marca ejercicios como realizados.</div>
+}
+else
+{
+    <div class="gt-chips">
+        @foreach (var item in resumen)
+        {
+            var id = item.EjercicioId;
+            <button class="gt-chip @(id == seleccionadoId ? "activo" : "")" @onclick="() => SeleccionarAsync(id)">
+                @item.EjercicioNombre
+            </button>
+        }
+    </div>
+
+    @if (actual != null)
+    {
+        <div class="gt-grafico">
+            <div class="gt-grafico-nombre">@actual.EjercicioNombre · @actual.GrupoMuscular</div>
+            <div class="gt-grafico-kg">@Formato.Kg(actual.UltimoPesoKg)</div>
+            <div class="gt-grafico-dif">
+                @(actual.DiferenciaKg >= 0 ? "+" : "")@Formato.Kg(actual.DiferenciaKg) desde el primer registro
+                (@actual.CantidadRegistros en total)
+            </div>
+            <GraficoLinea Puntos="historial" />
+        </div>
+
+        <div class="gt-card">
+            <div class="gt-card-titulo">Registros</div>
+            @foreach (var registro in historial.AsEnumerable().Reverse())
+            {
+                <div class="gt-fila">
+                    <span>@Formato.Fecha(registro.Fecha)</span>
+                    <strong>@Formato.Kg(registro.PesoKg)</strong>
+                </div>
+            }
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public int? AlumnoId { get; set; }
+
+    private List<ProgresoEjercicioDto> resumen = new();
+    private List<HistorialProgresoDto> historial = new();
+    private ProgresoEjercicioDto? actual;
+    private int seleccionadoId;
+    private bool cargando = true;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var (datos, mensaje) = await ProgresoSvc.ResumenAsync(AlumnoId);
+
+        resumen = datos ?? new();
+        error = mensaje;
+        cargando = false;
+
+        if (resumen.Count > 0)
+        {
+            await SeleccionarAsync(resumen[0].EjercicioId);
+        }
+    }
+
+    private async Task SeleccionarAsync(int ejercicioId)
+    {
+        seleccionadoId = ejercicioId;
+        actual = resumen.FirstOrDefault(r => r.EjercicioId == ejercicioId);
+
+        var (datos, mensaje) = await ProgresoSvc.HistorialAsync(ejercicioId, AlumnoId);
+
+        historial = datos ?? new();
+        error = mensaje;
+    }
+}

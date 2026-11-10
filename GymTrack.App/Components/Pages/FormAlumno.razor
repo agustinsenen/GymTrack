@@ -1,0 +1,203 @@
+@page "/alumnos/nuevo"
+@page "/alumnos/{Id:int}/editar"
+@attribute [Authorize(Roles = "Administrador,Profesor")]
+@inject AlumnosService AlumnosSvc
+@inject ProfesoresService ProfesoresSvc
+@inject AuthService Auth
+@inject NavigationManager Nav
+
+<a class="gt-volver" href="@(Id.HasValue ? $"alumnos/{Id}" : "alumnos")">‹ Volver</a>
+
+<h2 class="gt-h">@(Id.HasValue ? "Editar alumno" : "Nuevo alumno")</h2>
+
+@if (cargando)
+{
+    <p class="gt-info">Cargando...</p>
+}
+else
+{
+    <div class="gt-card">
+        <label class="gt-label">Nombre y apellido</label>
+        <input class="gt-input" maxlength="100" @bind="nombre" />
+
+        <label class="gt-label">DNI</label>
+        <input class="gt-input" inputmode="numeric" maxlength="10" @bind="dni" />
+
+        <label class="gt-label">Email</label>
+        <input class="gt-input" type="email" maxlength="150" autocapitalize="none" @bind="email" />
+
+        <label class="gt-label">Contraseña</label>
+        <input class="gt-input" type="password" @bind="password" />
+        <div class="gt-item-sub">
+            @(Id.HasValue
+                ? "Dejala vacía para no cambiarla."
+                : "Si la dejás vacía, la contraseña inicial es el DNI.")
+        </div>
+
+        @if (Auth.EsAdmin)
+        {
+            <label class="gt-label">Profesor a cargo</label>
+            <select class="gt-input" @bind="profesorId">
+                <option value="0">Elegí un profesor</option>
+                @foreach (var profesor in profesores)
+                {
+                    <option value="@profesor.Id">@profesor.Nombre</option>
+                }
+            </select>
+        }
+
+        @if (error != null)
+        {
+            <div class="gt-error">@error</div>
+        }
+
+        <button class="gt-btn" @onclick="GuardarAsync" disabled="@guardando">
+            @(guardando ? "Guardando..." : "Guardar")
+        </button>
+
+        @if (Id.HasValue)
+        {
+            <button class="gt-btn peligro" @onclick="DarDeBajaAsync" disabled="@guardando">
+                @(confirmarBaja ? "Tocá de nuevo para confirmar la baja" : "Dar de baja")
+            </button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    private List<ProfesorDto> profesores = new();
+    private string nombre = "";
+    private string dni = "";
+    private string email = "";
+    private string password = "";
+    private int profesorId;
+    private int profesorOriginal;
+    private bool cargando = true;
+    private bool guardando;
+    private bool confirmarBaja;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Auth.EsAdmin)
+        {
+            var (lista, _) = await ProfesoresSvc.ListarAsync();
+            profesores = lista ?? new();
+        }
+
+        if (Id.HasValue)
+        {
+            var (alumno, mensaje) = await AlumnosSvc.ObtenerAsync(Id.Value);
+
+            if (alumno == null)
+            {
+                error = mensaje;
+            }
+            else
+            {
+                nombre = alumno.Nombre;
+                dni = alumno.Dni;
+                email = alumno.Email;
+                profesorId = alumno.ProfesorId;
+                profesorOriginal = alumno.ProfesorId;
+            }
+        }
+
+        cargando = false;
+    }
+
+    private async Task GuardarAsync()
+    {
+        error = Validar();
+
+        if (error != null)
+        {
+            return;
+        }
+
+        guardando = true;
+
+        var dto = new GuardarAlumnoDto
+        {
+            Nombre = nombre.Trim(),
+            Dni = dni.Trim(),
+            Email = email.Trim(),
+            Password = string.IsNullOrWhiteSpace(password) ? null : password,
+            ProfesorId = Auth.EsAdmin ? profesorId : null,
+            Activo = true
+        };
+
+        var (alumno, mensaje) = Id.HasValue
+            ? await AlumnosSvc.ActualizarAsync(Id.Value, dto)
+            : await AlumnosSvc.CrearAsync(dto);
+
+        // Al editar, el cambio de profesor va por un endpoint aparte (solo administrador)
+        if (alumno != null && Id.HasValue && Auth.EsAdmin && profesorId != profesorOriginal)
+        {
+            (alumno, mensaje) = await AlumnosSvc.ReasignarProfesorAsync(Id.Value, profesorId);
+        }
+
+        guardando = false;
+
+        if (alumno == null)
+        {
+            error = mensaje;
+            return;
+        }
+
+        Nav.NavigateTo($"alumnos/{alumno.Id}");
+    }
+
+    private string? Validar()
+    {
+        if (string.IsNullOrWhiteSpace(nombre))
+        {
+            return "Ingresá el nombre.";
+        }
+
+        var soloNumeros = dni.Trim();
+
+        if (soloNumeros.Length < 7 || soloNumeros.Length > 10 || !soloNumeros.All(char.IsDigit))
+        {
+            return "El DNI debe tener entre 7 y 10 números.";
+        }
+
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
+        {
+            return "Ingresá un email válido.";
+        }
+
+        if (!string.IsNullOrWhiteSpace(password) && password.Length < 6)
+        {
+            return "La contraseña debe tener al menos 6 caracteres.";
+        }
+
+        if (Auth.EsAdmin && profesorId == 0)
+        {
+            return "Elegí el profesor a cargo.";
+        }
+
+        return null;
+    }
+
+    private async Task DarDeBajaAsync()
+    {
+        // Primer toque: pide confirmación. Segundo toque: da de baja.
+        if (!confirmarBaja)
+        {
+            confirmarBaja = true;
+            return;
+        }
+
+        guardando = true;
+        error = await AlumnosSvc.DarDeBajaAsync(Id!.Value);
+        guardando = false;
+
+        if (error == null)
+        {
+            Nav.NavigateTo("alumnos");
+        }
+    }
+}

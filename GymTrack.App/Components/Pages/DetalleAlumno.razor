@@ -1,0 +1,212 @@
+@page "/alumnos/{Id:int}"
+@attribute [Authorize(Roles = "Administrador,Profesor")]
+@inject AlumnosService AlumnosSvc
+@inject RutinasService RutinasSvc
+
+<a class="gt-volver" href="alumnos">‹ Volver a alumnos</a>
+
+@if (cargando)
+{
+    <p class="gt-info">Cargando...</p>
+}
+else if (alumno == null)
+{
+    <div class="gt-error">@(error ?? "No se encontró el alumno.")</div>
+}
+else
+{
+    <div class="gt-titulo-fila">
+        <div>
+            <h2 class="gt-h">@alumno.Nombre</h2>
+            <div class="gt-sub">DNI @alumno.Dni · Prof. @alumno.ProfesorNombre</div>
+        </div>
+        <a class="gt-btn chico secundario" href="alumnos/@Id/editar">Editar</a>
+    </div>
+
+    <div class="gt-tabs">
+        <button class="@(pestana == "rutina" ? "activo" : "")" @onclick='() => pestana = "rutina"'>Rutina</button>
+        <button class="@(pestana == "progreso" ? "activo" : "")" @onclick='() => pestana = "progreso"'>Progreso</button>
+        <button class="@(pestana == "cuota" ? "activo" : "")" @onclick='() => pestana = "cuota"'>Cuota</button>
+    </div>
+
+    @if (pestana == "rutina")
+    {
+        @if (rutina == null)
+        {
+            <div class="gt-vacio">Este alumno todavía no tiene una rutina.</div>
+        }
+        else
+        {
+            @foreach (var dia in rutina.Dias)
+            {
+                <div class="gt-card">
+                    <div class="gt-card-titulo">@dia.NombreDia</div>
+
+                    @foreach (var item in dia.Ejercicios)
+                    {
+                        <div class="gt-item">
+                            <span class="gt-item-texto">
+                                <span class="gt-item-nombre">@item.EjercicioNombre</span>
+                                <span class="gt-item-sub">
+                                    @item.GrupoMuscular
+                                    @if (item.UltimoPesoKg.HasValue)
+                                    {
+                                        <text> · último: @Formato.Kg(item.UltimoPesoKg.Value)</text>
+                                    }
+                                </span>
+                            </span>
+                            <span class="gt-item-dato">@item.Series × @item.Repeticiones</span>
+                        </div>
+                    }
+                </div>
+            }
+        }
+
+        <a class="gt-btn" href="alumnos/@Id/rutina">@(rutina == null ? "Crear rutina" : "Editar rutina")</a>
+    }
+    else if (pestana == "progreso")
+    {
+        <PanelProgreso AlumnoId="Id" />
+    }
+    else
+    {
+        <div class="gt-cuota @(alumno.CuotaVencida ? "vencida" : "")">
+            <div class="gt-cuota-texto">@Formato.Cuota(alumno)</div>
+            @if (alumno.FechaVencimientoCuota.HasValue)
+            {
+                <div class="gt-cuota-fecha">Vencimiento: @Formato.Fecha(alumno.FechaVencimientoCuota.Value)</div>
+            }
+        </div>
+
+        <div class="gt-card">
+            <div class="gt-card-titulo">Renovar cuota</div>
+
+            <label class="gt-label">Fecha de pago</label>
+            <input class="gt-input" type="date" @bind="fechaPago" />
+
+            <label class="gt-label">Nuevo vencimiento (opcional)</label>
+            <input class="gt-input" type="date" @bind="nuevoVencimiento" />
+            <div class="gt-item-sub">Si lo dejás vacío, se suma un mes automáticamente.</div>
+
+            <label class="gt-label">Observación (opcional)</label>
+            <input class="gt-input" maxlength="200" @bind="observacion" />
+
+            @if (errorPago != null)
+            {
+                <div class="gt-error">@errorPago</div>
+            }
+
+            @if (avisoPago != null)
+            {
+                <div class="gt-ok">@avisoPago</div>
+            }
+
+            <button class="gt-btn" @onclick="RegistrarPagoAsync" disabled="@guardando">
+                @(guardando ? "Guardando..." : "Registrar pago")
+            </button>
+        </div>
+
+        <div class="gt-card">
+            <div class="gt-card-titulo">Historial de pagos</div>
+
+            @if (pagos.Count == 0)
+            {
+                <div class="gt-item-sub">Todavía no hay pagos registrados.</div>
+            }
+
+            @foreach (var pago in pagos)
+            {
+                <div class="gt-fila">
+                    <span>Pagó el @Formato.Fecha(pago.FechaPago)</span>
+                    <span class="gt-item-sub">hasta @Formato.Fecha(pago.NuevaFechaVencimiento)</span>
+                </div>
+            }
+        </div>
+
+        <CalendarioMes AlumnoId="Id" Vencimiento="alumno.FechaVencimientoCuota" />
+    }
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private AlumnoDto? alumno;
+    private RutinaDto? rutina;
+    private List<PagoCuotaDto> pagos = new();
+    private string pestana = "rutina";
+    private bool cargando = true;
+    private string? error;
+
+    // Formulario de pago
+    private DateTime fechaPago = DateTime.Today;
+    private DateTime? nuevoVencimiento;
+    private string observacion = "";
+    private bool guardando;
+    private string? errorPago;
+    private string? avisoPago;
+
+    protected override async Task OnInitializedAsync()
+    {
+        (alumno, error) = await AlumnosSvc.ObtenerAsync(Id);
+
+        if (alumno != null)
+        {
+            // Si no tiene rutina la API responde 404: se muestra como "sin rutina"
+            (rutina, _) = await RutinasSvc.ObtenerAsync(Id);
+            await CargarPagosAsync();
+        }
+
+        cargando = false;
+    }
+
+    private async Task CargarPagosAsync()
+    {
+        var (lista, _) = await AlumnosSvc.PagosAsync(Id);
+        pagos = lista ?? new();
+    }
+
+    private async Task RegistrarPagoAsync()
+    {
+        errorPago = null;
+        avisoPago = null;
+
+        if (fechaPago.Date > DateTime.Today)
+        {
+            errorPago = "La fecha de pago no puede ser futura.";
+            return;
+        }
+
+        if (nuevoVencimiento.HasValue && nuevoVencimiento.Value.Date <= fechaPago.Date)
+        {
+            errorPago = "El nuevo vencimiento debe ser posterior a la fecha de pago.";
+            return;
+        }
+
+        guardando = true;
+
+        var (pago, mensaje) = await AlumnosSvc.RegistrarPagoAsync(Id, new RegistrarPagoDto
+        {
+            FechaPago = fechaPago.Date,
+            NuevaFechaVencimiento = nuevoVencimiento?.Date,
+            Observacion = string.IsNullOrWhiteSpace(observacion) ? null : observacion.Trim()
+        });
+
+        guardando = false;
+
+        if (pago == null)
+        {
+            errorPago = mensaje;
+            return;
+        }
+
+        avisoPago = $"Pago registrado. La cuota queda cubierta hasta el {Formato.Fecha(pago.NuevaFechaVencimiento)}.";
+        nuevoVencimiento = null;
+        observacion = "";
+
+        // Se vuelve a pedir el alumno para actualizar el estado de la cuota
+        var (actualizado, _) = await AlumnosSvc.ObtenerAsync(Id);
+        alumno = actualizado ?? alumno;
+
+        await CargarPagosAsync();
+    }
+}

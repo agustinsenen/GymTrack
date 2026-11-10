@@ -1,0 +1,31 @@
+@inherits LayoutComponentBase
+@inject AuthService Auth
+@inject NavigationManager Nav
+
+<div class="gt-app">
+    <AuthorizeView>
+        <Authorized>
+            <header class="gt-header">
+                <div>
+                    <div class="gt-marca">GymTrack</div>
+                    <div class="gt-usuario">@Auth.Nombre · @Auth.Rol</div>
+                </div>
+                <button class="gt-salir" @onclick="Salir">Salir</button>
+            </header>
+        </Authorized>
+    </AuthorizeView>
+
+    <main class="gt-contenido">
+        @Body
+    </main>
+
+    <NavInferior />
+</div>
+
+@code {
+    private void Salir()
+    {
+        Auth.Logout();
+        Nav.NavigateTo("login");
+    }
+}

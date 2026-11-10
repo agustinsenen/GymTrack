@@ -130,6 +130,9 @@ using (var scope = app.Services.CreateScope())
         db.SaveChanges();
     }
 
+    // Catálogo base de ejercicios (solo agrega los que falten)
+    DatosIniciales.CargarEjercicios(db);
+
     // Administrador inicial
     if (!db.Usuarios.Any(u => u.Email == "admin@gymtrack.com"))
     {

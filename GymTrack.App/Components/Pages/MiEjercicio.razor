@@ -1,0 +1,129 @@
+@page "/rutina/ejercicio/{ItemId:int}"
+@attribute [Authorize(Roles = "Alumno")]
+@inject RutinasService RutinasSvc
+@inject ProgresoService ProgresoSvc
+@inject EjerciciosService EjerciciosSvc
+@inject NavigationManager Nav
+
+<a class="gt-volver" href="rutina">‹ Volver a la rutina</a>
+
+@if (cargando)
+{
+    <p class="gt-info">Cargando...</p>
+}
+else if (item == null)
+{
+    <div class="gt-error">@(error ?? "El ejercicio no está en tu rutina actual.")</div>
+}
+else
+{
+    <h2 class="gt-h">@item.EjercicioNombre</h2>
+    <div class="gt-sub">@item.GrupoMuscular</div>
+
+    @if (EjerciciosSvc.UrlImagen(item.FotoUrl) is string foto)
+    {
+        <img class="gt-foto" src="@foto" alt="@item.EjercicioNombre" />
+    }
+
+    @if (!string.IsNullOrWhiteSpace(item.VideoUrl))
+    {
+        <button class="gt-btn secundario" @onclick="AbrirVideo">▶ Ver video de referencia</button>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(item.Descripcion))
+    {
+        <p class="gt-nota">@item.Descripcion</p>
+    }
+
+    <div class="gt-datos">
+        <div><strong>@item.Series</strong><span>Series</span></div>
+        <div><strong>@item.Repeticiones</strong><span>Repeticiones</span></div>
+        <div><strong>@(item.KgObjetivo.HasValue ? Formato.Kg(item.KgObjetivo.Value) : "-")</strong><span>Objetivo</span></div>
+    </div>
+
+    <div class="gt-card">
+        <label class="gt-label">Kg utilizados</label>
+        <input class="gt-input" type="number" inputmode="decimal" min="0" step="0.5" @bind="kg" />
+
+        @if (item.UltimoPesoKg.HasValue)
+        {
+            <div class="gt-item-sub">Último registro: @Formato.Kg(item.UltimoPesoKg.Value)</div>
+        }
+
+        @if (error != null)
+        {
+            <div class="gt-error">@error</div>
+        }
+
+        <button class="gt-btn" @onclick="MarcarRealizado" disabled="@guardando">
+            @(guardando ? "Guardando..." : item.RealizadoHoy ? "Actualizar registro de hoy" : "Marcar como realizado")
+        </button>
+    </div>
+}
+
+@code {
+    [Parameter] public int ItemId { get; set; }
+
+    private RutinaItemDto? item;
+    private decimal kg;
+    private bool cargando = true;
+    private bool guardando;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var (rutina, mensaje) = await RutinasSvc.ObtenerAsync();
+
+        error = mensaje;
+        item = rutina?.Dias.SelectMany(d => d.Ejercicios).FirstOrDefault(e => e.Id == ItemId);
+
+        if (item != null)
+        {
+            // Se propone el último peso usado o, si no hay, el objetivo del profesor
+            kg = item.UltimoPesoKg ?? item.KgObjetivo ?? 0;
+        }
+
+        cargando = false;
+    }
+
+    private async Task MarcarRealizado()
+    {
+        if (kg < 0 || kg > 1000)
+        {
+            error = "El peso debe estar entre 0 y 1000 kg.";
+            return;
+        }
+
+        guardando = true;
+        error = null;
+
+        var (registro, mensaje) = await ProgresoSvc.RegistrarAsync(new RegistrarProgresoDto
+        {
+            RutinaEjercicioId = ItemId,
+            PesoKg = kg,
+            Realizado = true
+        });
+
+        guardando = false;
+
+        if (registro == null)
+        {
+            error = mensaje;
+            return;
+        }
+
+        Nav.NavigateTo("rutina");
+    }
+
+    private async Task AbrirVideo()
+    {
+        try
+        {
+            await Browser.Default.OpenAsync(new Uri(item!.VideoUrl!), BrowserLaunchMode.SystemPreferred);
+        }
+        catch (Exception)
+        {
+            error = "No se pudo abrir el video.";
+        }
+    }
+}
